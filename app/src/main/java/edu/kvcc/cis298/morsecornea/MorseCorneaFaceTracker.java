@@ -16,6 +16,7 @@
 package edu.kvcc.cis298.morsecornea;
 
 import android.graphics.PointF;
+import android.util.Log;
 
 import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.face.Face;
@@ -37,8 +38,10 @@ import edu.kvcc.cis298.morsecornea.ui.camera.GraphicOverlay;
  * face was detected but one or both of the eyes were not detected.  Missing landmarks can happen
  * during quick movements due to camera image blurring.
  */
-class GooglyFaceTracker extends Tracker<Face> {
+class MorseCorneaFaceTracker extends Tracker<Face> {
     private static final float EYE_CLOSED_THRESHOLD = 0.4f;
+
+    private static final String TAG = "MorseCornea";
 
     private GraphicOverlay mOverlay;
     private GooglyEyesGraphic mEyesGraphic;
@@ -54,12 +57,86 @@ class GooglyFaceTracker extends Tracker<Face> {
     private boolean mPreviousIsRightOpen = true;
 
 
+
+    //Private properties I added
+
+    private static final String DOT = "0";
+    private static final String DASH = "1";
+
+    private static final long DASH_DURATION = 1500;
+    private static final long LETTER_SPACE_DURATION = 1500;
+    private static final long WORD_SPACE_DURATION = 3500;
+
+    private boolean mLetterAdded = false;
+    private boolean mWordAdded = false;
+
+    private long mPreviousTimestamp = System.currentTimeMillis();
+
+    private String mCurrentLetterCode = "";
+    private String mCurrentWord = "";
+
+    public String getCurrentMessage() {
+        return mCurrentMessage;
+    }
+
+    private String mCurrentMessage = "";
+
+    private boolean mIsInCloseDuration = false;
+
+    private HashMap<String, String> mCodes = new HashMap<>();
+
+    private BlinkActivity mBlinkActivity;
+
+
+
+
     //==============================================================================================
     // Methods
     //==============================================================================================
 
-    GooglyFaceTracker(GraphicOverlay overlay) {
+    MorseCorneaFaceTracker(GraphicOverlay overlay, BlinkActivity blinkActivity) {
         mOverlay = overlay;
+        mBlinkActivity = blinkActivity;
+
+        mCodes.put("01", "A");
+        mCodes.put("1000", "B");
+        mCodes.put("1010", "C");
+        mCodes.put("100", "D");
+        mCodes.put("0", "E");
+        mCodes.put("0010", "F");
+        mCodes.put("110", "G");
+        mCodes.put("0000", "H");
+        mCodes.put("00", "I");
+        mCodes.put("0111", "J");
+        mCodes.put("101", "K");
+        mCodes.put("0100", "L");
+        mCodes.put("11", "M");
+        mCodes.put("10", "N");
+        mCodes.put("111", "O");
+        mCodes.put("0110", "P");
+        mCodes.put("1101", "Q");
+        mCodes.put("010", "R");
+        mCodes.put("000", "S");
+        mCodes.put("1", "T");
+        mCodes.put("001", "U");
+        mCodes.put("0001", "V");
+        mCodes.put("011", "W");
+        mCodes.put("1001", "X");
+        mCodes.put("1011", "Y");
+        mCodes.put("1100", "Z");
+
+        mCodes.put("01111", "1");
+        mCodes.put("00111", "2");
+        mCodes.put("00011", "3");
+        mCodes.put("00001", "4");
+        mCodes.put("00000", "5");
+        mCodes.put("10000", "6");
+        mCodes.put("11000", "7");
+        mCodes.put("11100", "8");
+        mCodes.put("11110", "9");
+        mCodes.put("11111", "0");
+
+
     }
 
     /**
@@ -103,6 +180,35 @@ class GooglyFaceTracker extends Tracker<Face> {
         }
 
         mEyesGraphic.updateEyes(leftPosition, isLeftOpen, rightPosition, isRightOpen);
+
+        boolean atLeastOneEyeIsClosed = !(isLeftOpen && isRightOpen);
+
+        //If one of the eyes are closed
+        if (atLeastOneEyeIsClosed) {
+            Log.d(TAG, "At least one eye is closed");
+            //If the tracker is currently in the open state and changing to the closed state right now
+            if (isInOpenDuration()) {
+                Log.d(TAG, "InOpenDuration transitioning to closed");
+                this.transitionToCloseState();
+            }
+            //Set program to be in closed duration state
+            mIsInCloseDuration = true;
+
+         //Else, both eyes are open
+        } else {
+            Log.d(TAG, "Both eyes are open");
+            //If the tracker is currently in the closed state and changing to the open state right now
+            if (isInCloseDuration()) {
+                Log.d(TAG, "InClosedDuration transitioning to open");
+                this.transitionToOpenState();
+            } else {
+                Log.d(TAG, "InOpenDuration and checking to see if a letter needs to be finished");
+                this.openStateCheck();
+            }
+
+            //Set program to be in open duration state
+            mIsInCloseDuration = false;
+        }
     }
 
     /**
@@ -157,4 +263,77 @@ class GooglyFaceTracker extends Tracker<Face> {
         float y = face.getPosition().y + (prop.y * face.getHeight());
         return new PointF(x, y);
     }
+
+    private boolean isInOpenDuration() {
+        return !mIsInCloseDuration;
+    }
+
+    private boolean isInCloseDuration() {
+        return mIsInCloseDuration;
+    }
+
+    private void openStateCheck() {
+        long currentOpenDuration = System.currentTimeMillis() - mPreviousTimestamp;
+
+        if (currentOpenDuration >= LETTER_SPACE_DURATION && !mLetterAdded) {
+            this.addLetterToWord();
+            mLetterAdded = true;
+        }
+
+        if (currentOpenDuration >= WORD_SPACE_DURATION && !mWordAdded) {
+            this.addWordToMessage();
+            mWordAdded = true;
+        }
+    }
+
+    private void transitionToCloseState() {
+
+        this.openStateCheck();
+
+        mLetterAdded = false;
+        mWordAdded = false;
+    }
+
+    private void transitionToOpenState() {
+
+        //Calculate the current duration between when the eyes were first closed and now
+        long currentClosedDuration = System.currentTimeMillis() - mPreviousTimestamp;
+
+        if (currentClosedDuration > DASH_DURATION) {
+            //Add dash to the current letter we are working on
+            mCurrentLetterCode += DASH;
+        } else {
+            //Add dot to the current letter we are working on
+            mCurrentLetterCode += DOT;
+        }
+
+        mLetterAdded = false;
+        mWordAdded = false;
+
+        mPreviousTimestamp = System.currentTimeMillis();
+    }
+
+
+    private void addLetterToWord() {
+        String currentLetter = mCodes.get(mCurrentLetterCode);
+
+        if (currentLetter != null) {
+            mCurrentWord += currentLetter;
+            Log.d(TAG, "Current Word Now: " + mCurrentWord);
+        }
+
+        mBlinkActivity.updateMessageEditText(mCurrentMessage + mCurrentWord);
+
+        mCurrentLetterCode = "";
+    }
+
+    private void addWordToMessage() {
+        mCurrentMessage += mCurrentWord + " ";
+        Log.d(TAG, "Current Message Now: " + mCurrentMessage);
+
+        mBlinkActivity.updateMessageEditText(mCurrentMessage);
+
+        mCurrentWord = "";
+    }
+
 }

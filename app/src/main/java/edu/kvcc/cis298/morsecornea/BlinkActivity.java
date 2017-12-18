@@ -17,6 +17,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -36,7 +37,7 @@ import edu.kvcc.cis298.morsecornea.ui.camera.GraphicOverlay;
 
 public class BlinkActivity extends AppCompatActivity {
 
-    private static final String TAG = "GooglyEyes";
+    private static final String TAG = "MorseCornea";
 
     private static final int RC_HANDLE_GMS = 9001;
 
@@ -46,6 +47,8 @@ public class BlinkActivity extends AppCompatActivity {
     private CameraSource mCameraSource = null;
     private CameraSourcePreview mPreview;
     private GraphicOverlay mGraphicOverlay;
+    private EditText mMessageEditText;
+    private MorseCorneaFaceTracker mTracker;
 
     private boolean mIsFrontFacing = true;
 
@@ -60,6 +63,8 @@ public class BlinkActivity extends AppCompatActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_blink);
+
+        mMessageEditText = (EditText) findViewById(R.id.messageInput);
 
         mPreview = (CameraSourcePreview) findViewById(R.id.preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
@@ -79,6 +84,17 @@ public class BlinkActivity extends AppCompatActivity {
         } else {
             requestCameraPermission();
         }
+
+        Button mSendButton = (Button)findViewById(R.id.sendButton);
+        mSendButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent i = new Intent(Intent.ACTION_SEND);
+                i.setType("text/plain");
+                i.putExtra(Intent.EXTRA_TEXT, mTracker.getCurrentMessage());
+                startActivity(i);
+            }
+        });
     }
 
     /**
@@ -203,6 +219,20 @@ public class BlinkActivity extends AppCompatActivity {
         savedInstanceState.putBoolean("IsFrontFacing", mIsFrontFacing);
     }
 
+    public void updateMessageEditText(String message) {
+        final String str = message;
+        Log.d(TAG, "About to update edittext to " + str);
+        runOnUiThread(new Runnable() {
+            public void run() {
+                mMessageEditText.setText(str);
+                Log.d(TAG, "EditText Updated to " + str);
+            }
+        });
+    }
+
+
+
+
     /**
      * Toggles between front-facing and rear-facing modes.
      */
@@ -266,8 +296,8 @@ public class BlinkActivity extends AppCompatActivity {
             // speed up detection, in that it can quit after finding a single face and can assume
             // that the nextIrisPosition face position is usually relatively close to the last seen
             // face position.
-            Tracker<Face> tracker = new GooglyFaceTracker(mGraphicOverlay);
-            processor = new LargestFaceFocusingProcessor.Builder(detector, tracker).build();
+            mTracker = new MorseCorneaFaceTracker(mGraphicOverlay, this);
+            processor = new LargestFaceFocusingProcessor.Builder(detector, mTracker).build();
         } else {
             // For rear facing mode, a factory is used to create per-face tracker instances.  A
             // tracker is created for each face and is maintained as long as the same face is
@@ -280,10 +310,11 @@ public class BlinkActivity extends AppCompatActivity {
             // between these cases is the choice of Processor: one that is specialized for tracking
             // a single face or one that can handle multiple faces.  Here, we use MultiProcessor,
             // which is a standard component of the mobile vision API for managing multiple items.
+            final BlinkActivity that = this;
             MultiProcessor.Factory<Face> factory = new MultiProcessor.Factory<Face>() {
                 @Override
                 public Tracker<Face> create(Face face) {
-                    return new GooglyFaceTracker(mGraphicOverlay);
+                    return new MorseCorneaFaceTracker(mGraphicOverlay, that);
                 }
             };
             processor = new MultiProcessor.Builder<>(factory).build();

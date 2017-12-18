@@ -8,10 +8,36 @@
     android:layout_height="match_parent"
     android:keepScreenOn="true">
 
+    <Button
+        android:id="@+id/flipButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentBottom="true"
+        android:text="flip"/>
+
+    <EditText
+        android:id="@+id/messageInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:focusable="false"
+        android:layout_alignParentBottom="true"
+        android:layout_toRightOf="@+id/flipButton"
+        android:layout_toLeftOf="@id/sendButton" />
+
+    <Button
+        android:id="@+id/sendButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentBottom="true"
+        android:text="Send" />
+
     <edu.kvcc.cis298.morsecornea.ui.camera.CameraSourcePreview
         android:id="@+id/preview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:layout_above="@id/messageInput">
 
         <edu.kvcc.cis298.morsecornea.ui.camera.GraphicOverlay
             android:id="@+id/faceOverlay"
@@ -20,12 +46,5 @@
 
     </edu.kvcc.cis298.morsecornea.ui.camera.CameraSourcePreview>
 
-    <Button
-        android:id="@+id/flipButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentBottom="true"
-        android:text="flip"/>
 
 </RelativeLayout>
